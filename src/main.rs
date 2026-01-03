@@ -3,7 +3,8 @@ mod spell;
 mod enemy;
 mod wave;
 
-use std::io::{self, Write};
+// No longer need std::io imports for input
+
 use chemistry::atom::Atom;
 use chemistry::element::get_by_symbol;
 use chemistry::reaction::bond_atoms;
@@ -125,12 +126,24 @@ fn main() {
     state.atoms.push(Atom::new(get_by_symbol("H").unwrap()));
     state.atoms.push(Atom::new(get_by_symbol("O").unwrap()));
 
-    loop {
-        print!("\nAlchemix > ");
-        io::stdout().flush().unwrap();
+    let mut rl = rustyline::DefaultEditor::new().expect("Failed to create rustyline editor");
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).expect("Failed to read line");
+    loop {
+        let readline = rl.readline("\nAlchemix > ");
+        let input = match readline {
+            Ok(line) => {
+                rl.add_history_entry(line.as_str()).expect("Failed to add history entry");
+                line
+            }
+            Err(rustyline::error::ReadlineError::Interrupted) | Err(rustyline::error::ReadlineError::Eof) => {
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        };
+
         let parts: Vec<&str> = input.trim().split_whitespace().collect();
 
         if parts.is_empty() {
