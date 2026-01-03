@@ -16,7 +16,6 @@ struct GameState {
     atoms: Vec<Atom>,
     spells: Vec<Spell>,
     wave: Wave,
-    loot_pool: Vec<Atom>,
     player_hp: i32,
     player_max_hp: i32,
     next_enemy_idx: usize,
@@ -28,7 +27,6 @@ impl GameState {
             atoms: Vec::new(),
             spells: Vec::new(),
             wave: Wave::generate(1),
-            loot_pool: Vec::new(),
             player_hp: 100,
             player_max_hp: 100,
             next_enemy_idx: 0,
@@ -50,20 +48,12 @@ impl GameState {
         }
         
         println!("Enemies:");
-        if self.wave.enemies.iter().all(|e| !e.is_alive()) {
-            println!("  All enemies defeated! Type 'collect' to gather loot and proceed.");
-        } else {
-            for (i, enemy) in self.wave.enemies.iter().enumerate() {
-                if enemy.is_alive() {
-                    println!("  [{}] {} - HP: {}/{}", i, enemy.name, enemy.hp, enemy.max_hp);
-                } else {
-                    println!("  [{}] {} - DEFEATED", i, enemy.name);
-                }
+        for (i, enemy) in self.wave.enemies.iter().enumerate() {
+            if enemy.is_alive() {
+                println!("  [{}] {} - HP: {}/{}", i, enemy.name, enemy.hp, enemy.max_hp);
+            } else {
+                println!("  [{}] {} - DEFEATED", i, enemy.name);
             }
-        }
-
-        if !self.loot_pool.is_empty() {
-            println!("Loot on ground: {}", self.format_atoms(&self.loot_pool));
         }
     }
 
@@ -154,7 +144,6 @@ fn main() {
                 println!("  status                        - Show current game state");
                 println!("  synth <sym1> <sym2> ...      - Synthesize a spell from atoms");
                 println!("  cast <spell_idx> <idx/me>    - Cast a spell on an enemy or yourself");
-                println!("  collect                       - Pick up loot and start next wave");
                 println!("  exit                          - Quit the game");
             }
             "status" => state.print_status(),
@@ -254,31 +243,27 @@ fn main() {
                         println!("{} has been defeated!", enemy.name);
                         let loot = enemy.drop_loot();
                         println!("Dropped: {}", state.format_atoms(&loot));
-                        state.loot_pool.extend(loot);
+                        println!("Player collected the atoms from the enemy drop.");
+                        state.atoms.extend(loot);
                     }
                 }
 
-                state.perform_enemy_turn();
+                if state.wave.is_cleared() {
+                    println!("\n--- ALL ENEMIES DEFEATED ---");
+                    let next_wave_num = state.wave.number + 1;
+                    println!("\n--- WAVE {} START ---", next_wave_num);
+                    state.wave = Wave::generate(next_wave_num);
+                    state.player_hp = state.player_max_hp;
+                    state.next_enemy_idx = 0; // Reset turn cycle for new wave
+                    state.print_status();
+                } else {
+                    state.perform_enemy_turn();
+                }
                 
                 if state.player_hp <= 0 {
                     println!("\nBetter luck next time, Alchemist.");
                     break;
                 }
-            }
-            "collect" => {
-                if !state.wave.is_cleared() {
-                    println!("You must defeat all enemies before moving on!");
-                    continue;
-                }
-
-                println!("Collected {} atoms from the ground.", state.loot_pool.len());
-                state.atoms.extend(state.loot_pool.drain(..));
-                
-                let next_wave_num = state.wave.number + 1;
-                println!("\n--- WAVE {} START ---", next_wave_num);
-                state.wave = Wave::generate(next_wave_num);
-                state.next_enemy_idx = 0; // Reset turn cycle for new wave
-                state.print_status();
             }
             _ => println!("Unknown command. Type 'help' for list of commands."),
         }
