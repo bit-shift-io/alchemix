@@ -72,4 +72,14 @@ impl Enemy {
     pub fn is_alive(&self) -> bool {
         self.hp > 0
     }
+
+    pub fn calculate_attack_damage(&self) -> i32 {
+        let mut rng = rand::rng();
+        let _base_damage = self.name.len() as i32 / 2; // Simple base damage related to name
+        let _level_scaling = (self.hp as f32 / self.max_hp as f32 * 5.0) as i32; // Scaling by HP percentage
+        
+        // Let's use a simpler formula based on level as planned
+        let level = (self.max_hp - 20) / 10;
+        level * 3 + rng.random_range(1..5)
+    }
 }

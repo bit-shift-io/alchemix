@@ -17,6 +17,9 @@ struct GameState {
     spells: Vec<Spell>,
     wave: Wave,
     loot_pool: Vec<Atom>,
+    player_hp: i32,
+    player_max_hp: i32,
+    next_enemy_idx: usize,
 }
 
 impl GameState {
@@ -26,11 +29,15 @@ impl GameState {
             spells: Vec::new(),
             wave: Wave::generate(1),
             loot_pool: Vec::new(),
+            player_hp: 100,
+            player_max_hp: 100,
+            next_enemy_idx: 0,
         }
     }
 
     fn print_status(&self) {
         println!("\n--- GAME STATUS ---");
+        println!("Player HP: {}/{}", self.player_hp, self.player_max_hp);
         println!("Wave: {}", self.wave.number);
         println!("Atoms: {}", self.format_atoms(&self.atoms));
         println!("Spells:");
@@ -72,6 +79,48 @@ impl GameState {
             .map(|(sym, count)| format!("{}({})", sym, count))
             .collect::<Vec<_>>()
             .join(", ")
+    }
+
+    fn perform_enemy_turn(&mut self) {
+        let alive_enemies: Vec<usize> = self.wave.enemies.iter()
+            .enumerate()
+            .filter(|(_, e)| e.is_alive())
+            .map(|(i, _)| i)
+            .collect();
+
+        if alive_enemies.is_empty() {
+            return;
+        }
+
+        // Find the next alive enemy to take a turn
+        let enemy_idx = if alive_enemies.contains(&self.next_enemy_idx) {
+            self.next_enemy_idx
+        } else {
+            // Find the first alive enemy after the current next_enemy_idx
+            *alive_enemies.iter()
+                .find(|&&i| i > self.next_enemy_idx)
+                .unwrap_or(&alive_enemies[0])
+        };
+
+        let enemy = &self.wave.enemies[enemy_idx];
+        let damage = enemy.calculate_attack_damage();
+        self.player_hp -= damage;
+
+        println!("\n--- ENEMY TURN ---");
+        println!("{} attacks you for {} damage!", enemy.name, damage);
+        
+        if self.player_hp <= 0 {
+            self.player_hp = 0;
+            println!("You have been defeated! Game Over.");
+        } else {
+            println!("Player HP: {}/{}", self.player_hp, self.player_max_hp);
+        }
+
+        // Update the index for the next turn
+        // Find the index of the next alive enemy in the loop
+        let current_pos = alive_enemies.iter().position(|&i| i == enemy_idx).unwrap();
+        let next_pos = (current_pos + 1) % alive_enemies.len();
+        self.next_enemy_idx = alive_enemies[next_pos];
     }
 }
 
@@ -189,6 +238,13 @@ fn main() {
                     println!("Dropped: {}", state.format_atoms(&loot));
                     state.loot_pool.extend(loot);
                 }
+
+                state.perform_enemy_turn();
+                
+                if state.player_hp <= 0 {
+                    println!("\nBetter luck next time, Alchemist.");
+                    break;
+                }
             }
             "collect" => {
                 if !state.wave.is_cleared() {
@@ -202,6 +258,7 @@ fn main() {
                 let next_wave_num = state.wave.number + 1;
                 println!("\n--- WAVE {} START ---", next_wave_num);
                 state.wave = Wave::generate(next_wave_num);
+                state.next_enemy_idx = 0; // Reset turn cycle for new wave
                 state.print_status();
             }
             _ => println!("Unknown command. Type 'help' for list of commands."),
