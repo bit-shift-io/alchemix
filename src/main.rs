@@ -153,7 +153,7 @@ fn main() {
                 println!("Commands:");
                 println!("  status                        - Show current game state");
                 println!("  synth <sym1> <sym2> ...      - Synthesize a spell from atoms");
-                println!("  cast <spell_idx> <enemy_idx> - Cast a spell on an enemy");
+                println!("  cast <spell_idx> <idx/me>    - Cast a spell on an enemy or yourself");
                 println!("  collect                       - Pick up loot and start next wave");
                 println!("  exit                          - Quit the game");
             }
@@ -203,7 +203,7 @@ fn main() {
             }
             "cast" => {
                 if parts.len() < 3 {
-                    println!("Usage: cast <spell_index> <enemy_index>");
+                    println!("Usage: cast <spell_index> <enemy_index/me>");
                     continue;
                 }
 
@@ -212,31 +212,50 @@ fn main() {
                     _ => { println!("Invalid spell index"); continue; }
                 };
 
-                let enemy_idx: usize = match parts[2].parse() {
-                    Ok(i) if i < state.wave.enemies.len() => i,
-                    _ => { println!("Invalid enemy index"); continue; }
-                };
-
-                let enemy = &mut state.wave.enemies[enemy_idx];
-                if !enemy.is_alive() {
-                    println!("Enemy is already defeated!");
-                    continue;
-                }
-
                 let spell = &state.spells[spell_idx];
-                let (damage, is_crit) = enemy.take_damage(spell);
-                
-                println!("Casting {} on {}!", spell.name, enemy.name);
-                if is_crit {
-                    println!("CRITICAL HIT! It's super effective!");
-                }
-                println!("Dealt {} damage.", damage);
 
-                if !enemy.is_alive() {
-                    println!("{} has been defeated!", enemy.name);
-                    let loot = enemy.drop_loot();
-                    println!("Dropped: {}", state.format_atoms(&loot));
-                    state.loot_pool.extend(loot);
+                if parts[2].to_lowercase() == "me" || parts[2].to_lowercase() == "self" {
+                    println!("Casting {} on yourself!", spell.name);
+                    
+                    match spell.element_type {
+                        crate::spell::molecule::SpellElement::Healing => {
+                            let heal_amount = spell.power as i32;
+                            let old_hp = state.player_hp;
+                            state.player_hp = (state.player_hp + heal_amount).min(state.player_max_hp);
+                            println!("You healed for {} HP! ({} -> {})", state.player_hp - old_hp, old_hp, state.player_hp);
+                        }
+                        _ => {
+                            let damage = spell.power as i32;
+                            state.player_hp -= damage;
+                            println!("Ouch! You hit yourself for {} damage.", damage);
+                        }
+                    }
+                } else {
+                    let enemy_idx: usize = match parts[2].parse() {
+                        Ok(i) if i < state.wave.enemies.len() => i,
+                        _ => { println!("Invalid enemy index"); continue; }
+                    };
+
+                    let enemy = &mut state.wave.enemies[enemy_idx];
+                    if !enemy.is_alive() {
+                        println!("Enemy is already defeated!");
+                        continue;
+                    }
+
+                    let (damage, is_crit) = enemy.take_damage(spell);
+                    
+                    println!("Casting {} on {}!", spell.name, enemy.name);
+                    if is_crit {
+                        println!("CRITICAL HIT! It's super effective!");
+                    }
+                    println!("Dealt {} damage.", damage);
+
+                    if !enemy.is_alive() {
+                        println!("{} has been defeated!", enemy.name);
+                        let loot = enemy.drop_loot();
+                        println!("Dropped: {}", state.format_atoms(&loot));
+                        state.loot_pool.extend(loot);
+                    }
                 }
 
                 state.perform_enemy_turn();
